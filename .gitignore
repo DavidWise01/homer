@@ -1,0 +1,14 @@
+# transient per-plane findings (merged then deleted in CI)
+agent/findings-*.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# os / editors
+.DS_Store
+Thumbs.db
+*.swp
+_planes/

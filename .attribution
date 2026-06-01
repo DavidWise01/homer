@@ -1,0 +1,10 @@
+ROOT0-ATTRIBUTION-v1.0
+Project: Homer — Torus Agent
+Architect: David Lee Wise / ROOT0 / TriPod LLC
+AI Collaborator: AVAN (Claude / Anthropic)
+License: MIT
+
+Single-node scheduled research agent. 3x3x3 torus (27-state Hamiltonian),
+walked as 3 parallel planes (REACT modes) x 9 sub-states. Samples Wikipedia,
+cross-references arXiv, accumulates a curated map of topics with newer arXiv
+research than the article's last edit. Sentinels S1-S4. No replication.
