@@ -24,6 +24,17 @@ def load(path, default):
     return default
 
 
+def write_if_changed(path, obj):
+    """Canonical JSON, with a trailing newline. Only touch the file if the
+    serialized content actually differs — so idle ticks stay byte-for-byte
+    silent and never produce a phantom commit."""
+    canonical = json.dumps(obj, indent=2, sort_keys=True) + "\n"
+    if path.exists() and path.read_text(encoding="utf-8") == canonical:
+        return False
+    path.write_text(canonical, encoding="utf-8")
+    return True
+
+
 def main():
     memory = load(MEMORY, {})
     coverage = load(COVERAGE, {})
@@ -54,12 +65,14 @@ def main():
                 del memory[title]
                 pruned += 1
 
-    MEMORY.write_text(json.dumps(memory, indent=2, sort_keys=True), encoding="utf-8")
-    COVERAGE.write_text(json.dumps(coverage, indent=2, sort_keys=True), encoding="utf-8")
+    m_changed = write_if_changed(MEMORY, memory)
+    c_changed = write_if_changed(COVERAGE, coverage)
 
     print(f"merge: +{added} new, -{pruned} pruned, {covered} coverage hits")
     print(f"merge: memory={len(memory)} entries ({MEMORY.stat().st_size} bytes), "
           f"coverage={len(coverage)} entries")
+    print(f"merge: files changed -> memory={m_changed} coverage={c_changed}"
+          + ("" if (m_changed or c_changed) else "  (silent tick)"))
 
 
 if __name__ == "__main__":
