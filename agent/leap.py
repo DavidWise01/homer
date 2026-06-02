@@ -24,6 +24,8 @@ import requests
 import wikipedia
 import arxiv
 
+import box  # 6-2-6 delivery box: build + schema-validate
+
 ROOT = Path(__file__).parent
 TOKEN = ROOT / "token.json"
 MEM = ROOT / "memory.json"
@@ -119,19 +121,21 @@ def commons_hits(query, n=3):
 
 # ── comparator ───────────────────────────────────────────────────────────────
 def comparator(wiki, arxiv_list):
-    """Is arXiv newer than the article's last edit, and topically related?"""
+    """Is arXiv newer than the article's last edit, and topically related?
+    Returns (verdict, relevance, match, newer)."""
     if not arxiv_list:
-        return "OLD/DISREGARD", 0.0, None
+        return "OLD/DISREGARD", 0.0, None, False
     newest = max(arxiv_list, key=lambda p: parse_iso(p["published"]))
     wiki_mod = wiki.get("last_modified")
     wiki_dt = parse_iso(wiki_mod) if wiki_mod else datetime.now(timezone.utc)
-    if parse_iso(newest["published"]) > wiki_dt:
+    newer = parse_iso(newest["published"]) > wiki_dt
+    if newer:
         wset = set(wiki["title"].lower().split())
         pset = set(newest["title"].lower().split())
         rel = len(wset & pset) / len(wset | pset) if (wset | pset) else 0.0
         verdict = "NEW" if rel > REL_THRESHOLD else "OLD/DISREGARD"
-        return verdict, round(rel, 3), newest
-    return "OLD/DISREGARD", 0.0, newest
+        return verdict, round(rel, 3), newest, True
+    return "OLD/DISREGARD", 0.0, newest, False
 
 
 # ── the leap ─────────────────────────────────────────────────────────────────
@@ -173,10 +177,11 @@ def leap():
         print(f"C: {len(d.get('arxiv', []))} arxiv, {len(d.get('commons', []))} commons")
 
     elif phase == "R":                                 # REACT (comparator)
-        verdict, rel, match = comparator(d.get("wiki", {}), d.get("arxiv", []))
-        d["comparator"] = {"verdict": verdict, "relevance": rel, "match": match}
+        verdict, rel, match, newer = comparator(d.get("wiki", {}), d.get("arxiv", []))
+        d["comparator"] = {"verdict": verdict, "relevance": rel,
+                           "match": match, "newer": newer}
         t["phase"] = "S1"
-        print(f"R: {verdict} (relevance {rel})")
+        print(f"R: {verdict} (relevance {rel}, newer={newer})")
 
     elif phase == "S1":                                # WATCHDOG + self-heal
         complete = all(k in d for k in ("wiki", "arxiv", "comparator"))
@@ -190,21 +195,25 @@ def leap():
             print(f"S1: {'drop' if d.get('drop') else 'pass'}")
 
     elif phase == "S2":                                # COMMIT
+        cmp = d.get("comparator", {})
         if not d.get("drop") and "wiki" in d:
-            mem = load_memory()
             key = d["wiki"]["title"]
-            mem[key] = {
-                "entity": key,
-                "wiki_url": d["wiki"]["url"],
-                "wiki_last_modified": d["wiki"].get("last_modified"),
-                "arxiv": d.get("comparator", {}).get("match"),
-                "commons": d.get("commons", []),
-                "relevance": d.get("comparator", {}).get("relevance"),
-                "verdict": "NEW",
-                "found": now(),
-            }
-            save_memory(mem)
-            print(f"S2: committed {key} ({len(mem)} total)")
+            b = box.build_box(
+                wiki=d["wiki"], arxiv_list=d.get("arxiv", []),
+                commons=d.get("commons", []), aware_ts=d.get("ts") or now(),
+                cycle=t["tick"], verdict="NEW",
+                relevance=cmp.get("relevance", 0.0), match=cmp.get("match"),
+                newer=cmp.get("newer", False), found=now(),
+            )
+            try:
+                box.validate_box(b)                    # 6-2-6 gate
+            except Exception as e:
+                print(f"S2: box failed 6-2-6 validation — drop: {e}")
+            else:
+                mem = load_memory()
+                mem[key] = b
+                save_memory(mem)
+                print(f"S2: committed {key} (box {b['out']['commit']}, {len(mem)} total)")
         else:
             print("S2: dropped — nothing committed")
         t = fresh(t["tick"] + 1)                       # spawn fresh token
@@ -213,17 +222,50 @@ def leap():
     print(f"hop: {phase} -> {t['phase']}  (cycle {t['tick']})")
 
 
+def prim(title):
+    """The distilled primitive: crawl + compare -> one validated 6-2-6 box.
+    The whole agent reduces to: while True: memory.update(prim(random_wiki()))."""
+    wiki = {"title": title, "url": wiki_url(title)}
+    try:
+        wiki["last_modified"] = wiki_last_modified(title)
+    except Exception:
+        wiki["last_modified"] = None
+    try:
+        arxiv_list = arxiv_recent(title)
+    except Exception as e:
+        print(f"prim: arxiv unavailable ({e}) — treating as no results", file=sys.stderr)
+        arxiv_list = []
+    try:
+        commons = commons_hits(title)
+    except Exception:
+        commons = []
+    verdict, rel, match, newer = comparator(wiki, arxiv_list)
+    b = box.build_box(
+        wiki=wiki, arxiv_list=arxiv_list, commons=commons, aware_ts=now(),
+        cycle=load_token()["tick"], verdict=verdict, relevance=rel,
+        match=match, newer=newer, found=now(),
+    )
+    box.validate_box(b)
+    return b
+
+
 def verify():
-    """Sentinel integrity check — token + memory must be valid JSON objects."""
+    """Sentinel integrity check — token valid, and every memory entry a valid 6-2-6 box."""
     tok = json.loads(TOKEN.read_text(encoding="utf-8"))
     assert tok.get("phase") in PHASES, "token phase invalid"
     assert isinstance(tok.get("data"), dict), "token data invalid"
+    n = 0
     if MEM.exists():
         mem = json.loads(MEM.read_text(encoding="utf-8"))
         assert isinstance(mem, dict), "memory.json not an object"
-        print(f"integrity OK — phase={tok['phase']} cycle={tok['tick']} memory={len(mem)}")
-    else:
-        print(f"integrity OK — phase={tok['phase']} cycle={tok['tick']} memory=0")
+        errs = box.validate_memory(mem)
+        if errs:
+            for k, m in errs[:5]:
+                print(f"  invalid box [{k}]: {m}")
+            raise AssertionError(f"{len(errs)} memory entries fail the 6-2-6 schema")
+        n = len(mem)
+    print(f"integrity OK — phase={tok['phase']} cycle={tok['tick']} "
+          f"memory={n} (all 6-2-6 valid)")
 
 
 def status():
@@ -236,5 +278,9 @@ if __name__ == "__main__":
         verify()
     elif "--status" in sys.argv:
         status()
+    elif "--prim" in sys.argv:
+        i = sys.argv.index("--prim")
+        title = sys.argv[i + 1] if len(sys.argv) > i + 1 else random_title()
+        print(json.dumps(prim(title), indent=2))
     else:
         leap()

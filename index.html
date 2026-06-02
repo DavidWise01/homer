@@ -168,6 +168,10 @@
   .verdict.IDLE{color:var(--plasma);border-color:var(--plasma);background:#04222a}
 
   /* ─────────── LOGBOOK ─────────── */
+  .fmtbadge{display:inline-block;font-size:7px;letter-spacing:1px;
+            color:var(--metroid);background:#04240a;border:2px solid var(--metroid);
+            padding:5px 9px;margin-bottom:10px;text-shadow:1px 1px 0 #000;
+            box-shadow:0 0 8px rgba(57,255,20,.3)}
   .log{max-height:430px;overflow-y:auto;border:2px solid var(--steel);background:#070815}
   .logrow{display:grid;grid-template-columns:1fr 70px;gap:8px;
           padding:11px 12px;border-bottom:2px solid #12152e;align-items:center}
@@ -175,6 +179,13 @@
   .logrow .lt{font-size:9px;color:var(--metroid);text-shadow:1px 1px 0 #000;word-break:break-word}
   .logrow .lsub{font-size:7px;color:var(--dim);margin-top:7px;line-height:1.8;word-break:break-word}
   .logrow .lsub a{font-size:7px}
+  /* auditable box fingerprint — small monospace tag */
+  .logrow .commit{font-family:"Courier New",monospace;font-size:7px;color:var(--plasma);
+          background:#04222a;border:1px solid #134a55;padding:1px 4px;margin-left:6px;
+          letter-spacing:.5px;white-space:nowrap;vertical-align:middle}
+  .logrow .vchip{font-size:6px;padding:1px 4px;border:1px solid;letter-spacing:.5px}
+  .logrow .vchip.NEW{color:var(--metroid);border-color:var(--metroid);background:#04240a}
+  .logrow .vchip.OLD{color:var(--dim);border-color:var(--steel);background:#0c0e22}
   .relbox{text-align:right}
   .relbox .rv{font-size:11px;color:var(--samus2)}
   .relbar{height:6px;background:#0a1a08;border:1px solid var(--steel);margin-top:6px}
@@ -312,6 +323,9 @@
   <!-- ───── LOGBOOK ───── -->
   <div class="panel">
     <h2>LOGBOOK · SCAN DATA <span class="tag" id="logTag">0 ENTRIES</span></h2>
+    <div class="fmtbadge" title="Every entry is a 6-2-6 box: 6 in / 2 engine / 6 out, schema-validated.">
+      DELIVERY FORMAT · 6-2-6 · SCHEMA-VALIDATED
+    </div>
     <div class="log" id="log"></div>
   </div>
 
@@ -385,33 +399,49 @@
                published:"2025-05-09T00:00:00Z"}}
     }
   };
+  // Each entry is now a 6-2-6 box: 6 in / 2 engine / 6 out, schema-validated.
   var DEMO_MEMORY = {
     "Topological insulator":{
-      entity:"Topological insulator",
-      wiki_url:"https://en.wikipedia.org/wiki/Topological_insulator",
-      wiki_last_modified:"2024-11-02T14:21:00Z",
-      arxiv:{title:"Higher-order topological insulators in synthetic dimensions",
-             url:"https://arxiv.org/abs/2505.01234",published:"2025-05-09T00:00:00Z"},
-      commons:["File:Topological insulator band.svg"],
-      relevance:0.31, verdict:"NEW", found:"2025-05-09T08:00:00Z"
+      box:"6-2-6",
+      in:{ wikipedia:"Topological insulator",
+           arxiv:"query:Topological insulator",
+           commons:["File:Topological insulator band.svg"],
+           aware:"2025-05-09T08:00:00Z:ready",
+           token:"cycle:7", rate:"ok" },
+      engine:{ crawl:{ arxiv_found:18, commons_found:3 },
+               compare:{ method:"recency+cosine", newer:true, relevance:0.31 } },
+      out:{ verdict:"NEW", relevance:0.31, timestamp:"2025-05-09T08:00:00Z",
+            wiki_url:"https://en.wikipedia.org/wiki/Topological_insulator",
+            arxiv_url:"https://arxiv.org/abs/2505.01234",
+            commit:"b0854f29ac1d" }
     },
     "Ising model":{
-      entity:"Ising model",
-      wiki_url:"https://en.wikipedia.org/wiki/Ising_model",
-      wiki_last_modified:"2024-08-17T09:10:00Z",
-      arxiv:{title:"Exact Ising model dynamics on a quantum processor",
-             url:"https://arxiv.org/abs/2504.09876",published:"2025-04-22T00:00:00Z"},
-      commons:["File:Ising quench.png"],
-      relevance:0.40, verdict:"NEW", found:"2025-04-22T14:00:00Z"
+      box:"6-2-6",
+      in:{ wikipedia:"Ising model",
+           arxiv:"query:Ising model",
+           commons:["File:Ising quench.png"],
+           aware:"2025-04-22T14:00:00Z:ready",
+           token:"cycle:5", rate:"ok" },
+      engine:{ crawl:{ arxiv_found:24, commons_found:5 },
+               compare:{ method:"recency+cosine", newer:true, relevance:0.40 } },
+      out:{ verdict:"NEW", relevance:0.40, timestamp:"2025-04-22T14:00:00Z",
+            wiki_url:"https://en.wikipedia.org/wiki/Ising_model",
+            arxiv_url:"https://arxiv.org/abs/2504.09876",
+            commit:"3f1c9e7d20ab" }
     },
     "CRISPR gene editing":{
-      entity:"CRISPR gene editing",
-      wiki_url:"https://en.wikipedia.org/wiki/CRISPR_gene_editing",
-      wiki_last_modified:"2025-01-05T11:00:00Z",
-      arxiv:{title:"In vivo CRISPR gene editing with reduced off-target activity",
-             url:"https://arxiv.org/abs/2505.05555",published:"2025-05-18T00:00:00Z"},
-      commons:["File:CRISPR diagram.svg"],
-      relevance:0.50, verdict:"NEW", found:"2025-05-18T16:30:00Z"
+      box:"6-2-6",
+      in:{ wikipedia:"CRISPR gene editing",
+           arxiv:"query:CRISPR gene editing",
+           commons:["File:CRISPR diagram.svg"],
+           aware:"2025-05-18T16:30:00Z:ready",
+           token:"cycle:9", rate:"ok" },
+      engine:{ crawl:{ arxiv_found:41, commons_found:7 },
+               compare:{ method:"recency+cosine", newer:true, relevance:0.50 } },
+      out:{ verdict:"NEW", relevance:0.50, timestamp:"2025-05-18T16:30:00Z",
+            wiki_url:"https://en.wikipedia.org/wiki/CRISPR_gene_editing",
+            arxiv_url:"https://arxiv.org/abs/2505.05555",
+            commit:"a72be5108c34" }
     }
   };
 
@@ -529,9 +559,13 @@
   /* ─────────── RENDER: LOGBOOK ─────────── */
   function renderLog(memory){
     var keys = Object.keys(memory||{});
-    var entries = keys.map(function(k){return memory[k];})
+    // Each value is a 6-2-6 box: read everything out of entry.in / .engine / .out.
+    var entries = keys.map(function(k){
+        var e = memory[k] || {};
+        return { key:k, e:e, out:(e.out||{}), inb:(e.in||{}) };
+      })
       .sort(function(a,b){
-        return new Date(b.found||0) - new Date(a.found||0);
+        return new Date(b.out.timestamp||0) - new Date(a.out.timestamp||0);
       })
       .slice(0,30);
 
@@ -545,18 +579,25 @@
     }
     var html="";
     for(var i=0;i<entries.length;i++){
-      var e=entries[i];
-      var rp=relPct(e.relevance); if(rp==null) rp=0;
-      var ax=e.arxiv||{};
+      var rec=entries[i], out=rec.out, inb=rec.inb;
+      var title = rec.key || inb.wikipedia || "?";
+      var rp=relPct(out.relevance); if(rp==null) rp=0;
+      var verdict = out.verdict || "—";
+      var isNew = /^NEW/i.test(verdict);
+      var arxivUrl = out.arxiv_url; // may be null → omit link
+      var arxivQuery = inb.arxiv || "";
+      var commit = out.commit ? "#"+out.commit : "";
       html +=
         '<div class="logrow">'+
           '<div>'+
             '<div class="lt">'+
-              (e.wiki_url? '<a href="'+esc(e.wiki_url)+'" target="_blank" rel="noopener" style="color:var(--metroid)">'+esc(e.entity||"?")+'</a>' : esc(e.entity||"?"))+
+              (out.wiki_url? '<a href="'+esc(out.wiki_url)+'" target="_blank" rel="noopener" style="color:var(--metroid)">'+esc(title)+'</a>' : esc(title))+
+              (commit? ' <span class="commit">'+esc(commit)+'</span>' : '')+
             '</div>'+
             '<div class="lsub">'+
-              'arXiv: '+(ax.url? '<a href="'+esc(ax.url)+'" target="_blank" rel="noopener">'+esc(ax.title||ax.url)+'</a>' : esc(ax.title||"—"))+
-              '<br>found '+shortDate(e.found)+' · arXiv '+shortDate(ax.published)+' · wiki '+shortDate(e.wiki_last_modified)+
+              '<span class="vchip '+(isNew?'NEW':'OLD')+'">'+esc(verdict)+'</span> · '+
+              'arXiv: '+(arxivUrl? '<a href="'+esc(arxivUrl)+'" target="_blank" rel="noopener">'+esc(arxivUrl)+'</a>' : esc(arxivQuery||"—"))+
+              '<br>found '+shortDate(out.timestamp)+
             '</div>'+
           '</div>'+
           '<div class="relbox">'+

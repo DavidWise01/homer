@@ -93,6 +93,54 @@ NEW  ⟺  newest_arxiv.published > wiki.last_modified
 
 Newer *and* topically related. Everything else is `OLD/DISREGARD`.
 
+### Delivery format: the 6-2-6 box
+
+Every `memory.json` entry is a **6-2-6 box** — 6 inputs, 2 engines, 6 outputs.
+Nothing hidden. It makes Homer auditable: you can see exactly what went in, the
+two transforms, and what came out.
+
+```
++-------------------------------------------------------------+
+|                 HOMER  ·  6-2-6  DELIVERY  BOX              |
++--------------------+----------------+-----------------------+
+|      6  INTAKE     |   2  ENGINE    |      6  DELIVERY      |
+|--------------------|----------------|-----------------------|
+| 1. Wikipedia title |    [ CRAWL ]   | 1. Verdict            |
+| 2. arXiv query     |       ||       | 2. Relevance score    |
+| 3. Commons hits    |       \/       | 3. Timestamp          |
+| 4. Aware status    |   [ COMPARE ]  | 4. Wiki URL           |
+| 5. Token state     |                | 5. arXiv URL          |
+| 6. Rate status     |                | 6. Commit fingerprint |
++--------------------+----------------+-----------------------+
+|  Flow: A→O→C→R→S1→S2→A  |  1-in / 1-out  |  read-only / public |
++-------------------------------------------------------------+
+```
+
+The box is defined by a JSON Schema — [`schema/box-6-2-6.json`](schema/box-6-2-6.json) —
+with `additionalProperties: false` everywhere, so **no hidden state** can sneak in.
+`S2` builds the box, validates it against the schema, and *only then* commits;
+`leap.py --verify` re-validates every entry on each run. An invalid box is dropped,
+not stored.
+
+```bash
+python agent/leap.py --prim "Topological insulator"   # run the primitive, print one box
+```
+
+#### The distillation lens
+
+It's a distillation pattern, honestly framed:
+
+| Distillation | Homer |
+|--------------|-------|
+| Teacher | the open web — Wikipedia + arXiv + Commons |
+| Student | `memory.json` |
+| One primitive | `prim = compare(crawl(page))` — *"is there newer research?"* |
+| The loop | `while True: memory.update(prim(random_wiki()))` |
+| Product | small, specialized, auditable 6-2-6 boxes |
+
+Everything else — `A`, `O`, `S1`, `S2` — is bookkeeping so the one primitive can run
+forever on the free tier without exploding. One prim. One token. One public repo.
+
 ### Self-healing token
 
 If a run is killed mid-cycle (timeout, runner eviction), the next hop reaches `S1`,
@@ -116,13 +164,16 @@ cleanly to `A`. No corrupt state, no stuck loops.
 
 ```
 agent/
-  leap.py          the six-phase leapfrog + comparator + self-heal + --verify
+  leap.py          the six-phase leapfrog + comparator + self-heal + prim + --verify
+  box.py           builds, fingerprints, and schema-validates the 6-2-6 box
   token.json       the token — its phase, carried data, and cycle count
-  memory.json      the findings — curated NEW-research map
+  memory.json      the findings — curated NEW-research map (each entry a 6-2-6 box)
+schema/
+  box-6-2-6.json   JSON Schema for the delivery box (no hidden state)
 .github/workflows/
   torus.yml        cron: one hop per run, commit only on change
 index.html         live 8-bit dashboard (GitHub Pages)
-requirements.txt   wikipedia, arxiv, requests
+requirements.txt   wikipedia, arxiv, requests, jsonschema
 ```
 
 ---

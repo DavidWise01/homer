@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://davidwise01.github.io/homer/schema/box-6-2-6.json",
+  "title": "Homer 6-2-6 Delivery Box",
+  "description": "Every memory.json entry is a 6-2-6 box: 6 inputs, 2 engines, 6 outputs. No hidden state (additionalProperties:false everywhere). One auditable distilled box per leapfrog cycle.",
+  "type": "object",
+  "required": ["box", "in", "engine", "out"],
+  "additionalProperties": false,
+  "properties": {
+    "box": { "const": "6-2-6" },
+
+    "in": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "6 intake — every source and piece of state that fed the box.",
+      "required": ["wikipedia", "arxiv", "commons", "aware", "token", "rate"],
+      "properties": {
+        "wikipedia": { "type": "string", "description": "1. Wikipedia article title" },
+        "arxiv":     { "type": "string", "description": "2. arXiv query used" },
+        "commons":   { "type": "array", "items": { "type": "string" }, "description": "3. Wikimedia Commons hits" },
+        "aware":     { "type": "string", "description": "4. AWARE readiness marker" },
+        "token":     { "type": "string", "description": "5. Token state (cycle)" },
+        "rate":      { "type": "string", "description": "6. Rate-limit status" }
+      }
+    },
+
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "2 engines — the only real compute: CRAWL then COMPARE.",
+      "required": ["crawl", "compare"],
+      "properties": {
+        "crawl": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["arxiv_found", "commons_found"],
+          "properties": {
+            "arxiv_found":   { "type": "integer", "minimum": 0 },
+            "commons_found": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "compare": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "newer", "relevance"],
+          "properties": {
+            "method":    { "type": "string" },
+            "newer":     { "type": "boolean" },
+            "relevance": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+
+    "out": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "6 delivery — everything an editor needs to act, plus an auditable id.",
+      "required": ["verdict", "relevance", "timestamp", "wiki_url", "arxiv_url", "commit"],
+      "properties": {
+        "verdict":   { "enum": ["NEW", "OLD/DISREGARD"], "description": "1. Verdict" },
+        "relevance": { "type": "number", "minimum": 0, "maximum": 1, "description": "2. Relevance score" },
+        "timestamp": { "type": "string", "description": "3. Timestamp (ISO-8601)" },
+        "wiki_url":  { "type": "string", "description": "4. Wikipedia URL" },
+        "arxiv_url": { "type": ["string", "null"], "description": "5. arXiv URL (null if no match)" },
+        "commit":    { "type": "string", "description": "6. Box fingerprint (sha256[:12] of in+engine+out)" }
+      }
+    }
+  }
+}
