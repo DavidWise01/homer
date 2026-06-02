@@ -1,30 +1,25 @@
-name: Torus Agent — Hamiltonian Tick
+name: Homer — Leapfrog Hop
 
-# GitHub's cron is the while True. Each run = one tick.
-# 3 planes compute in parallel, then ONE job merges + commits (no push races).
+# GitHub's cron is `while True`. Each run = one hop of the single token.
+# A -> O -> C -> R -> S1 -> S2 -> A.  6 hops = one full cycle.
 on:
   schedule:
-    - cron: '0 */6 * * *'      # every 6h = 4 ticks/day
-  workflow_dispatch:            # manual run button
+    - cron: '0 */6 * * *'      # every 6h
+  workflow_dispatch:
 
 permissions:
-  contents: write               # bot commits the brain
-  issues: write                 # Sentinel S1 can file an issue on failure
+  contents: write
+  issues: write
 
 concurrency:
-  group: torus                  # never overlap runs
+  group: homer-leap            # one hop at a time, never overlap
   cancel-in-progress: false
 
 jobs:
-  # ── 3 planes, in parallel — observe + react, emit findings ──────────────────
-  tick:
-    name: Plane ${{ matrix.plane }}
+  hop:
+    name: Leap one hop
     runs-on: ubuntu-latest
-    timeout-minutes: 10                 # Sentinel S2: stay inside free tier
-    strategy:
-      fail-fast: false
-      matrix:
-        plane: [1, 2, 3]
+    timeout-minutes: 10                # Watchdog: stay inside free tier
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,66 +27,28 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - run: pip install -r requirements.txt
-      - name: Tick — plane ${{ matrix.plane }}
-        env:
-          PLANE_ID: ${{ matrix.plane }}
-        run: python agent/main.py
-      - name: Upload plane findings
-        uses: actions/upload-artifact@v4
-        with:
-          name: plane-${{ matrix.plane }}
-          path: agent/findings-${{ matrix.plane }}.json
-          if-no-files-found: warn
-          retention-days: 1
 
-  # ── one job merges all planes and makes a single commit ─────────────────────
-  commit:
-    name: Merge & commit
-    needs: tick
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Collect plane findings
-        uses: actions/download-artifact@v4
-        with:
-          path: _planes
-          pattern: plane-*
-      - name: Stage findings
+      - name: Leap
+        run: python agent/leap.py
+
+      - name: Sentinel — integrity check
+        run: python agent/leap.py --verify
+
+      - name: Commit token + memory (only if changed)
         run: |
-          for p in 1 2 3; do
-            src="_planes/plane-$p/findings-$p.json"
-            [ -f "$src" ] && cp "$src" "agent/findings-$p.json" || true
-          done
-      - name: React — merge into the brain
-        run: python agent/merge.py
-      - name: Sentinel S3 — integrity check
-        run: python agent/state.py --verify-memory
-      - name: Sentinel S4 — exodus if the brain outgrows the repo
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EXODUS_BYTES: '50000000'      # 50 MB
-        run: bash .github/exodus.sh
-      - name: Commit if the brain changed (else stay silent)
-        run: |
-          git config user.name "torus-agent[bot]"
-          git config user.email "torus-agent@users.noreply.github.com"
-          rm -f agent/findings-*.json
-          git add agent/memory.json agent/coverage.json
+          git config user.name "homer-agent[bot]"
+          git config user.email "homer-agent@users.noreply.github.com"
+          git add agent/token.json agent/memory.json
           if git diff --staged --quiet; then
-            echo "No change this tick — silent."
+            echo "no change this hop"
           else
-            git commit -m "torus: tick $(date -u +%Y%m%d-%H%M%S)"
+            git commit -m "homer: hop $(date -u +%Y%m%d-%H%M%S)"
             git push
           fi
 
-  # ── Sentinel S1 — open an issue if anything above failed ────────────────────
-  sentinel-s1:
-    name: Sentinel S1 — issue on failure
-    needs: [tick, commit]
+  watchdog:
+    name: Watchdog — issue on failure
+    needs: hop
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -101,6 +58,6 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Sentinel S1: Hamiltonian tick failed (run ${context.runId})`,
-              body: `A torus tick failed.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              title: `Homer watchdog: hop failed (run ${context.runId})`,
+              body: `A leapfrog hop failed.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             })

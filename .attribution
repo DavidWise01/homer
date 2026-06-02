@@ -1,10 +1,12 @@
 ROOT0-ATTRIBUTION-v1.0
-Project: Homer — Torus Agent
+Project: Homer — Leapfrog Agent (v2.0)
 Architect: David Lee Wise / ROOT0 / TriPod LLC
 AI Collaborator: AVAN (Claude / Anthropic)
 License: MIT
 
-Single-node scheduled research agent. 3x3x3 torus (27-state Hamiltonian),
-walked as 3 parallel planes (REACT modes) x 9 sub-states. Samples Wikipedia,
-cross-references arXiv, accumulates a curated map of topics with newer arXiv
-research than the article's last edit. Sentinels S1-S4. No replication.
+Single-node, read-only scheduled research agent. One token leapfrogs six
+phases (A AWARE, O OBSERVE, C CRAWL, R REACT, S1 WATCHDOG, S2 COMMIT), one
+hop per run, state in token.json. Reads Wikipedia + arXiv + Wikimedia Commons
+(never writes to them), accumulates a curated map of topics with newer arXiv
+research than the article's last edit. Self-healing token. No replication.
+Live 8-bit dashboard on GitHub Pages.

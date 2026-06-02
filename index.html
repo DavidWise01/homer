@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HOMER · Leapfrog Research Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  /* ─────────── NES METROID PALETTE ─────────── */
+  :root{
+    --void:#0b0b1a; --panel:#10122b; --steel:#2b2f55;
+    --samus:#ff7000; --samus2:#ffb000;
+    --metroid:#39ff14; --plasma:#22d3ee;
+    --danger:#ff2d55; --dim:#6b6fa0; --ink:#e8e8ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--void);color:var(--ink);}
+  body{
+    font-family:"Press Start 2P",monospace;
+    font-size:10px; line-height:1.7;
+    padding:14px; min-height:100vh;
+    overflow-x:hidden; position:relative;
+    image-rendering:pixelated;
+  }
+  /* starfield + scanlines overlays */
+  .starfield{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .star{position:absolute;width:2px;height:2px;background:var(--ink);opacity:.5;
+        animation:tw 3s steps(2) infinite}
+  .star.big{width:3px;height:3px;background:var(--plasma);opacity:.7}
+  @keyframes tw{0%,100%{opacity:.15}50%{opacity:.9}}
+  .scan{position:fixed;inset:0;z-index:50;pointer-events:none;
+        background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.22) 3px,rgba(0,0,0,0) 4px);}
+  main{position:relative;z-index:2;max-width:1180px;margin:0 auto}
+
+  /* chunky pixel panel */
+  .panel{
+    background:var(--panel);
+    border:3px solid var(--steel);
+    box-shadow:0 0 0 3px var(--void),
+               inset 0 0 0 3px #1b1e40,
+               6px 6px 0 0 rgba(0,0,0,.55);
+    padding:14px; margin-bottom:18px;
+  }
+  .panel h2{
+    font-size:11px;color:var(--samus2);
+    text-shadow:2px 2px 0 #000;
+    margin-bottom:12px;letter-spacing:1px;
+    border-bottom:3px solid var(--steel);padding-bottom:8px;
+  }
+  .panel h2 .tag{color:var(--dim);font-size:8px;float:right;}
+
+  a{color:var(--plasma);text-decoration:none}
+  a:hover{color:var(--samus2);text-decoration:underline}
+
+  /* ─────────── TOP HUD ─────────── */
+  .hud{
+    display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;
+    background:linear-gradient(180deg,#14163a,#0c0e22);
+    border:3px solid var(--samus);
+    box-shadow:0 0 0 3px var(--void),0 0 18px rgba(255,112,0,.25),6px 6px 0 0 rgba(0,0,0,.55);
+    padding:14px 16px;margin-bottom:18px;
+  }
+  .logo{font-size:24px;color:var(--samus);letter-spacing:2px;
+        text-shadow:3px 3px 0 #7a2a00, -1px -1px 0 var(--samus2);}
+  .logo small{display:block;font-size:7px;color:var(--dim);letter-spacing:1px;margin-top:6px;text-shadow:none}
+  .hudstats{display:flex;flex-wrap:wrap;gap:14px 26px;align-items:center;margin-left:auto}
+  .stat{display:flex;flex-direction:column;gap:6px}
+  .stat .lbl{font-size:7px;color:var(--dim);letter-spacing:1px}
+  .stat .val{font-size:13px;color:var(--ink)}
+  .stat .val.big{font-size:16px;color:var(--samus2);text-shadow:2px 2px 0 #000}
+
+  /* energy tanks */
+  .tanks{display:flex;gap:3px;flex-wrap:wrap;max-width:230px}
+  .tank{width:14px;height:9px;background:#0a1a08;border:2px solid var(--steel);}
+  .tank.full{background:var(--metroid);border-color:#1f7a0d;
+             box-shadow:0 0 5px rgba(57,255,20,.6),inset 0 0 0 1px #0a3b05;}
+
+  /* phase chip */
+  .phasechip{
+    font-size:12px;color:var(--samus);padding:7px 11px;
+    background:#1a0c02;border:2px solid var(--samus);
+    text-shadow:1px 1px 0 #000;
+    animation:pglow 1.4s steps(2) infinite;
+  }
+  @keyframes pglow{0%,100%{box-shadow:0 0 4px rgba(255,112,0,.4)}50%{box-shadow:0 0 16px rgba(255,112,0,.9)}}
+
+  .badge{font-size:8px;padding:6px 9px;border:2px solid var(--metroid);color:var(--metroid);
+         background:#04240a;text-shadow:1px 1px 0 #000;letter-spacing:1px;white-space:nowrap}
+  .badge.live{border-color:var(--samus2);color:var(--samus2);background:#231700}
+  .badge.off{border-color:var(--danger);color:var(--danger);background:#26060f}
+
+  button{
+    font-family:inherit;font-size:9px;cursor:pointer;
+    color:var(--void);background:var(--samus2);
+    border:none;padding:9px 13px;
+    box-shadow:3px 3px 0 0 #000,inset -2px -2px 0 0 #a86b00,inset 2px 2px 0 0 #ffe08a;
+  }
+  button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 0 #000}
+
+  /* ─────────── THE MAP ─────────── */
+  .mapwrap{position:relative;padding:24px 10px 10px}
+  .ring{
+    position:relative;display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(2,1fr);
+    gap:0;width:100%;max-width:760px;margin:0 auto;
+    min-height:300px;
+  }
+  /* corridor lines drawn behind via pseudo grid; we use an svg overlay instead */
+  .corridors{position:absolute;inset:0;z-index:1;pointer-events:none}
+  .room{
+    position:relative;z-index:2;margin:18px;
+    background:#0c0e22;border:3px solid var(--steel);
+    box-shadow:inset 0 0 0 2px #060713;
+    padding:14px 8px;text-align:center;
+    display:flex;flex-direction:column;justify-content:center;gap:8px;
+    min-height:96px;transition:none;
+  }
+  .room .pl{font-size:20px;color:var(--dim);text-shadow:2px 2px 0 #000}
+  .room .pn{font-size:8px;color:var(--dim);letter-spacing:1px}
+  .room .pd{font-size:6px;color:#43477a;letter-spacing:.5px;line-height:1.5}
+  .room.on{
+    border-color:var(--samus);background:#1c0e02;
+    box-shadow:inset 0 0 0 2px #3a1c00,0 0 22px rgba(255,112,0,.55);
+    animation:roompulse 1.2s steps(2) infinite;
+  }
+  .room.on .pl{color:var(--samus);text-shadow:2px 2px 0 #000,0 0 10px var(--samus2)}
+  .room.on .pn{color:var(--samus2)}
+  .room.on .pd{color:#caa15a}
+  @keyframes roompulse{0%,100%{box-shadow:inset 0 0 0 2px #3a1c00,0 0 12px rgba(255,112,0,.45)}
+                       50%{box-shadow:inset 0 0 0 2px #5a2c00,0 0 30px rgba(255,112,0,.95)}}
+
+  /* room grid placement to make a clean loop A O C / S2 S1 R  (top L->R, bottom R->L) */
+  .r0{grid-column:1;grid-row:1} .r1{grid-column:2;grid-row:1} .r2{grid-column:3;grid-row:1}
+  .r3{grid-column:3;grid-row:2} .r4{grid-column:2;grid-row:2} .r5{grid-column:1;grid-row:2}
+
+  /* morph ball travelling the ring */
+  .morph{
+    position:absolute;z-index:3;width:22px;height:22px;left:0;top:0;
+    margin:-11px;pointer-events:none;
+    offset-path:none;
+    animation:orbit 18s linear infinite;
+  }
+  .morph svg{display:block;width:22px;height:22px;image-rendering:pixelated}
+  /* travel a rounded rectangle loop using translate keyframes (percent of ring box) */
+  @keyframes orbit{
+    0%   {left:16%;top:25%}
+    16.6%{left:50%;top:25%}
+    33.3%{left:84%;top:25%}
+    50%  {left:84%;top:75%}
+    66.6%{left:50%;top:75%}
+    83.3%{left:16%;top:75%}
+    100% {left:16%;top:25%}
+  }
+  .balljelly{animation:squish .5s steps(2) infinite}
+  @keyframes squish{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.82) scaleX(1.1)}}
+
+  /* ─────────── COMPARATOR ─────────── */
+  .cmpgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .cmpcell .k{font-size:7px;color:var(--dim);margin-bottom:7px;letter-spacing:1px}
+  .cmpcell .v{font-size:9px;color:var(--ink);line-height:1.8;word-break:break-word}
+  .verdict{display:inline-block;font-size:11px;padding:8px 12px;border:2px solid;text-shadow:1px 1px 0 #000}
+  .verdict.NEW{color:var(--metroid);border-color:var(--metroid);background:#04240a;
+               box-shadow:0 0 12px rgba(57,255,20,.5)}
+  .verdict.OLD{color:var(--dim);border-color:var(--steel);background:#0c0e22}
+  .verdict.IDLE{color:var(--plasma);border-color:var(--plasma);background:#04222a}
+
+  /* ─────────── LOGBOOK ─────────── */
+  .log{max-height:430px;overflow-y:auto;border:2px solid var(--steel);background:#070815}
+  .logrow{display:grid;grid-template-columns:1fr 70px;gap:8px;
+          padding:11px 12px;border-bottom:2px solid #12152e;align-items:center}
+  .logrow:nth-child(odd){background:#0a0c1d}
+  .logrow .lt{font-size:9px;color:var(--metroid);text-shadow:1px 1px 0 #000;word-break:break-word}
+  .logrow .lsub{font-size:7px;color:var(--dim);margin-top:7px;line-height:1.8;word-break:break-word}
+  .logrow .lsub a{font-size:7px}
+  .relbox{text-align:right}
+  .relbox .rv{font-size:11px;color:var(--samus2)}
+  .relbar{height:6px;background:#0a1a08;border:1px solid var(--steel);margin-top:6px}
+  .relbar i{display:block;height:100%;background:var(--metroid);box-shadow:0 0 5px var(--metroid)}
+  .empty{padding:40px 16px;text-align:center;color:var(--dim);font-size:9px;line-height:2.2}
+  .empty .blink{color:var(--metroid);animation:blink 1s steps(2) infinite}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.15}}
+
+  /* ─────────── BRIEFING ─────────── */
+  .brief{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .briefcard{background:#0c0e22;border:2px solid var(--steel);padding:13px;
+             border-left:5px solid var(--samus)}
+  .briefcard h3{font-size:9px;color:var(--samus2);margin-bottom:10px;letter-spacing:1px}
+  .briefcard p{font-size:8px;color:#b9bbe6;line-height:2}
+  .loopline{display:flex;gap:9px;margin:7px 0;align-items:flex-start}
+  .loopline b{color:var(--plasma);min-width:34px;font-size:8px}
+  .loopline span{font-size:8px;color:#b9bbe6;line-height:1.7}
+
+  footer{font-size:7px;color:var(--dim);line-height:2.4;text-align:center;
+         border-top:3px solid var(--steel);padding-top:14px;margin-top:6px}
+  footer a{font-size:7px}
+
+  /* ─────────── RESPONSIVE ─────────── */
+  @media(max-width:720px){
+    .logo{font-size:18px}
+    .hudstats{margin-left:0;width:100%}
+    .ring{grid-template-columns:1fr;grid-template-rows:repeat(6,auto);max-width:340px}
+    .r0,.r1,.r2,.r3,.r4,.r5{grid-column:1}
+    .r0{grid-row:1}.r1{grid-row:2}.r2{grid-row:3}.r3{grid-row:4}.r4{grid-row:5}.r5{grid-row:6}
+    .corridors,.morph{display:none}
+    .cmpgrid,.brief{grid-template-columns:1fr}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *{animation:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="starfield" id="starfield"></div>
+<div class="scan"></div>
+
+<main>
+  <!-- ───── TOP HUD ───── -->
+  <div class="hud">
+    <div class="logo">HOMER<small>LEAPFROG RESEARCH AGENT</small></div>
+    <div class="hudstats">
+      <div class="stat">
+        <span class="lbl">ENERGY TANKS</span>
+        <div class="tanks" id="tanks"></div>
+        <span class="val" id="tankCount">0 FINDINGS</span>
+      </div>
+      <div class="stat">
+        <span class="lbl">CYCLE</span>
+        <span class="val big" id="cycle">--</span>
+      </div>
+      <div class="stat">
+        <span class="lbl">PHASE</span>
+        <span class="phasechip" id="phaseChip">-- · ----</span>
+      </div>
+      <div class="stat">
+        <span class="lbl">STATUS</span>
+        <span class="badge" id="dataMode">CONNECTING…</span>
+      </div>
+      <div class="stat">
+        <span class="lbl">&nbsp;</span>
+        <span class="badge">READ-ONLY</span>
+      </div>
+      <div class="stat">
+        <span class="lbl">&nbsp;</span>
+        <button id="refreshBtn">&#8635; REFRESH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── MAP ───── -->
+  <div class="panel">
+    <h2>SECTOR MAP <span class="tag" id="hopHint">TOKEN LEAPFROG · 6 HOPS = 1 CYCLE</span></h2>
+    <div class="mapwrap">
+      <div class="ring" id="ring">
+        <svg class="corridors" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <rect x="16" y="25" width="68" height="50" fill="none"
+                stroke="#2b2f55" stroke-width="2" stroke-dasharray="3 2"/>
+          <!-- direction arrows -->
+          <polygon points="50,23 47,20 53,20" fill="#22d3ee"/>
+          <polygon points="86,50 89,47 89,53" fill="#22d3ee"/>
+          <polygon points="50,77 53,80 47,80" fill="#22d3ee"/>
+          <polygon points="14,50 11,53 11,47" fill="#22d3ee"/>
+        </svg>
+        <!-- rooms injected by JS into .r0..r5 -->
+        <div class="room r0" data-i="0"></div>
+        <div class="room r1" data-i="1"></div>
+        <div class="room r2" data-i="2"></div>
+        <div class="room r3" data-i="3"></div>
+        <div class="room r4" data-i="4"></div>
+        <div class="room r5" data-i="5"></div>
+        <!-- morph ball -->
+        <div class="morph" id="morph">
+          <div class="balljelly">
+            <svg viewBox="0 0 11 11" shape-rendering="crispEdges">
+              <rect x="0" y="0" width="11" height="11" fill="#0b0b1a"/>
+              <rect x="3" y="1" width="5" height="1" fill="#ff7000"/>
+              <rect x="2" y="2" width="7" height="1" fill="#ff7000"/>
+              <rect x="1" y="3" width="9" height="5" fill="#ff7000"/>
+              <rect x="2" y="8" width="7" height="1" fill="#ff7000"/>
+              <rect x="3" y="9" width="5" height="1" fill="#ff7000"/>
+              <rect x="2" y="3" width="3" height="2" fill="#ffb000"/>
+              <rect x="6" y="5" width="3" height="3" fill="#7a2a00"/>
+              <rect x="5" y="2" width="1" height="1" fill="#ffe08a"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── COMPARATOR ───── -->
+  <div class="panel">
+    <h2>COMPARATOR <span class="tag">REACT PHASE · NEWER &amp; RELATED?</span></h2>
+    <div class="cmpgrid">
+      <div class="cmpcell">
+        <div class="k">CURRENT TARGET (WIKIPEDIA)</div>
+        <div class="v" id="cmpTarget">— standing by —</div>
+        <div class="k" style="margin-top:14px">ARXIV CANDIDATE</div>
+        <div class="v" id="cmpArxiv">—</div>
+      </div>
+      <div class="cmpcell">
+        <div class="k">VERDICT</div>
+        <div class="v"><span class="verdict IDLE" id="cmpVerdict">IDLE</span></div>
+        <div class="k" style="margin-top:14px">RELEVANCE</div>
+        <div class="v"><span id="cmpRel" style="color:var(--samus2);font-size:13px">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───── LOGBOOK ───── -->
+  <div class="panel">
+    <h2>LOGBOOK · SCAN DATA <span class="tag" id="logTag">0 ENTRIES</span></h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <!-- ───── MISSION BRIEFING ───── -->
+  <div class="panel">
+    <h2>MISSION BRIEFING</h2>
+    <div class="brief">
+      <div class="briefcard">
+        <h3>WHAT HOMER DOES</h3>
+        <p>A single autonomous node continuously samples Wikipedia, then checks arXiv and Wikimedia Commons for newer, related research. When the literature has moved ahead of the encyclopedia, it logs the gap.</p>
+      </div>
+      <div class="briefcard">
+        <h3>WHY IT MATTERS</h3>
+        <p>The output is a standing map of where the encyclopedia lags the literature — a curated, link-backed list of topics that are overdue for an update. Signal, not noise.</p>
+      </div>
+      <div class="briefcard">
+        <h3>HOW IT RUNS</h3>
+        <p>Strictly read-only — Homer never edits Wikipedia. Single-node, free-tier: one GitHub Actions cron every 6 hours advances one token by one hop. Zero servers, near-zero cost.</p>
+      </div>
+      <div class="briefcard">
+        <h3>THE 6-PHASE LOOP</h3>
+        <div class="loopline"><b>A</b><span>AWARE — check readiness, start a cycle.</span></div>
+        <div class="loopline"><b>O</b><span>OBSERVE — pick a random Wikipedia article.</span></div>
+        <div class="loopline"><b>C</b><span>CRAWL — read arXiv + Commons for that topic.</span></div>
+        <div class="loopline"><b>R</b><span>REACT — compare: is arXiv newer &amp; related?</span></div>
+        <div class="loopline"><b>S1</b><span>WATCHDOG — self-heal token, drop junk.</span></div>
+        <div class="loopline"><b>S2</b><span>COMMIT — log NEW findings, spawn a fresh token.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    ROOT0-ATTRIBUTION-v1.0 · Homer · David Lee Wise / ROOT0 / TriPod LLC · MIT<br/>
+    <a href="https://github.com/DavidWise01/homer" target="_blank" rel="noopener">GITHUB REPO</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/DavidWise01/homer/actions" target="_blank" rel="noopener">LIVE ACTIONS</a>
+  </footer>
+</main>
+
+<script>
+"use strict";
+(function(){
+  /* ─────────── CONFIG / DATA SHAPE ─────────── */
+  var BASE = "https://raw.githubusercontent.com/DavidWise01/homer/main/agent/";
+  var TOKEN_URL  = BASE + "token.json";
+  var MEMORY_URL = BASE + "memory.json";
+
+  var PHASES = [
+    {id:"A",  name:"AWARE",    desc:"READY · START CYCLE"},
+    {id:"O",  name:"OBSERVE",  desc:"RANDOM WIKI ARTICLE"},
+    {id:"C",  name:"CRAWL",    desc:"FETCH ARXIV+COMMONS"},
+    {id:"R",  name:"REACT",    desc:"COMPARE NEWER+RELATED"},
+    {id:"S1", name:"WATCHDOG", desc:"SELF-HEAL · DROP JUNK"},
+    {id:"S2", name:"COMMIT",   desc:"LOG NEW · SPAWN TOKEN"}
+  ];
+  var PHASE_INDEX = {A:0,O:1,C:2,R:3,S1:4,S2:5};
+
+  /* ─────────── DEMO FALLBACK ─────────── */
+  var DEMO_TOKEN = {
+    phase:"C", tick:7,
+    data:{
+      wiki:{title:"Topological insulator",
+            url:"https://en.wikipedia.org/wiki/Topological_insulator",
+            last_modified:"2024-11-02T14:21:00Z"},
+      arxiv:[{title:"Higher-order topological insulators in synthetic dimensions",
+              url:"https://arxiv.org/abs/2505.01234",
+              published:"2025-05-09T00:00:00Z"}],
+      comparator:{verdict:"NEW",relevance:0.31,
+        match:{title:"Higher-order topological insulators in synthetic dimensions",
+               url:"https://arxiv.org/abs/2505.01234",
+               published:"2025-05-09T00:00:00Z"}}
+    }
+  };
+  var DEMO_MEMORY = {
+    "Topological insulator":{
+      entity:"Topological insulator",
+      wiki_url:"https://en.wikipedia.org/wiki/Topological_insulator",
+      wiki_last_modified:"2024-11-02T14:21:00Z",
+      arxiv:{title:"Higher-order topological insulators in synthetic dimensions",
+             url:"https://arxiv.org/abs/2505.01234",published:"2025-05-09T00:00:00Z"},
+      commons:["File:Topological insulator band.svg"],
+      relevance:0.31, verdict:"NEW", found:"2025-05-09T08:00:00Z"
+    },
+    "Ising model":{
+      entity:"Ising model",
+      wiki_url:"https://en.wikipedia.org/wiki/Ising_model",
+      wiki_last_modified:"2024-08-17T09:10:00Z",
+      arxiv:{title:"Exact Ising model dynamics on a quantum processor",
+             url:"https://arxiv.org/abs/2504.09876",published:"2025-04-22T00:00:00Z"},
+      commons:["File:Ising quench.png"],
+      relevance:0.40, verdict:"NEW", found:"2025-04-22T14:00:00Z"
+    },
+    "CRISPR gene editing":{
+      entity:"CRISPR gene editing",
+      wiki_url:"https://en.wikipedia.org/wiki/CRISPR_gene_editing",
+      wiki_last_modified:"2025-01-05T11:00:00Z",
+      arxiv:{title:"In vivo CRISPR gene editing with reduced off-target activity",
+             url:"https://arxiv.org/abs/2505.05555",published:"2025-05-18T00:00:00Z"},
+      commons:["File:CRISPR diagram.svg"],
+      relevance:0.50, verdict:"NEW", found:"2025-05-18T16:30:00Z"
+    }
+  };
+
+  /* ─────────── HELPERS ─────────── */
+  function $(id){return document.getElementById(id);}
+  function esc(s){
+    return String(s==null?"":s).replace(/[&<>"]/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];
+    });
+  }
+  function shortDate(iso){
+    if(!iso) return "—";
+    var d=new Date(iso);
+    if(isNaN(d)) return esc(iso);
+    return d.toISOString().slice(0,10);
+  }
+  function relPct(r){
+    if(r==null||isNaN(r)) return null;
+    return Math.round(r*100);
+  }
+
+  /* ─────────── STARFIELD ─────────── */
+  (function buildStars(){
+    var sf=$("starfield"); if(!sf) return;
+    var n=46;
+    for(var i=0;i<n;i++){
+      var s=document.createElement("div");
+      s.className="star"+(Math.random()<0.18?" big":"");
+      s.style.left=(Math.random()*100)+"%";
+      s.style.top=(Math.random()*100)+"%";
+      s.style.animationDelay=(Math.random()*3).toFixed(2)+"s";
+      sf.appendChild(s);
+    }
+  })();
+
+  /* ─────────── RENDER: ROOMS (once) ─────────── */
+  (function buildRooms(){
+    var rooms=document.querySelectorAll(".room");
+    for(var i=0;i<rooms.length;i++){
+      var p=PHASES[i];
+      rooms[i].innerHTML =
+        '<div class="pl">'+esc(p.id)+'</div>'+
+        '<div class="pn">'+esc(p.name)+'</div>'+
+        '<div class="pd">'+esc(p.desc)+'</div>';
+    }
+  })();
+
+  function lightRoom(phaseId){
+    var idx = PHASE_INDEX[phaseId];
+    var rooms=document.querySelectorAll(".room");
+    for(var i=0;i<rooms.length;i++){
+      if(i===idx) rooms[i].classList.add("on");
+      else rooms[i].classList.remove("on");
+    }
+  }
+
+  /* ─────────── RENDER: HUD ─────────── */
+  function renderHud(token, memCount){
+    // energy tanks
+    var tanks=$("tanks"); tanks.innerHTML="";
+    var shown=Math.min(memCount,24);
+    var total=Math.max(shown, memCount>0?shown:8); // always show a frame of pips
+    var frame=Math.max(8, shown);
+    for(var i=0;i<frame;i++){
+      var t=document.createElement("div");
+      t.className="tank"+(i<memCount?" full":"");
+      tanks.appendChild(t);
+    }
+    $("tankCount").textContent = memCount+" FINDING"+(memCount===1?"":"S");
+
+    $("cycle").textContent = (token.tick!=null?token.tick:"--");
+
+    var p = PHASES[PHASE_INDEX[token.phase]] || PHASES[0];
+    $("phaseChip").textContent = p.id+" · "+p.name;
+    lightRoom(p.id);
+  }
+
+  /* ─────────── RENDER: COMPARATOR ─────────── */
+  function renderComparator(token){
+    var d = (token && token.data) || {};
+    var wiki = d.wiki || {};
+    var cmp  = d.comparator || {};
+    var match = cmp.match || (d.arxiv && d.arxiv[0]) || null;
+
+    // target
+    if(wiki.title){
+      $("cmpTarget").innerHTML =
+        (wiki.url ? '<a href="'+esc(wiki.url)+'" target="_blank" rel="noopener">'+esc(wiki.title)+'</a>' : esc(wiki.title))+
+        '<br><span style="color:var(--dim);font-size:7px">last edit '+shortDate(wiki.last_modified)+'</span>';
+    } else {
+      $("cmpTarget").textContent = "— standing by —";
+    }
+
+    // arxiv candidate
+    if(match && match.title){
+      $("cmpArxiv").innerHTML =
+        (match.url ? '<a href="'+esc(match.url)+'" target="_blank" rel="noopener">'+esc(match.title)+'</a>' : esc(match.title))+
+        '<br><span style="color:var(--dim);font-size:7px">published '+shortDate(match.published)+'</span>';
+    } else {
+      $("cmpArxiv").textContent = "—";
+    }
+
+    // verdict
+    var vEl=$("cmpVerdict");
+    var verdict = cmp.verdict;
+    if(verdict==="NEW"){ vEl.textContent="NEW · ITEM ACQUIRED"; vEl.className="verdict NEW"; }
+    else if(verdict){ vEl.textContent="OLD / DISREGARD"; vEl.className="verdict OLD"; }
+    else { vEl.textContent = token.phase==="R"||token.phase==="S1"||token.phase==="S2" ? "PENDING" : "IDLE / SCANNING"; vEl.className="verdict IDLE"; }
+
+    // relevance
+    var rp = relPct(cmp.relevance);
+    $("cmpRel").textContent = rp==null ? "—" : (rp+"%");
+  }
+
+  /* ─────────── RENDER: LOGBOOK ─────────── */
+  function renderLog(memory){
+    var keys = Object.keys(memory||{});
+    var entries = keys.map(function(k){return memory[k];})
+      .sort(function(a,b){
+        return new Date(b.found||0) - new Date(a.found||0);
+      })
+      .slice(0,30);
+
+    $("logTag").textContent = keys.length+" ENTR"+(keys.length===1?"Y":"IES");
+
+    var log=$("log");
+    if(!entries.length){
+      log.innerHTML =
+        '<div class="empty">NO SCANS YET<br><span class="blink">AWAITING NEW RESEARCH</span></div>';
+      return;
+    }
+    var html="";
+    for(var i=0;i<entries.length;i++){
+      var e=entries[i];
+      var rp=relPct(e.relevance); if(rp==null) rp=0;
+      var ax=e.arxiv||{};
+      html +=
+        '<div class="logrow">'+
+          '<div>'+
+            '<div class="lt">'+
+              (e.wiki_url? '<a href="'+esc(e.wiki_url)+'" target="_blank" rel="noopener" style="color:var(--metroid)">'+esc(e.entity||"?")+'</a>' : esc(e.entity||"?"))+
+            '</div>'+
+            '<div class="lsub">'+
+              'arXiv: '+(ax.url? '<a href="'+esc(ax.url)+'" target="_blank" rel="noopener">'+esc(ax.title||ax.url)+'</a>' : esc(ax.title||"—"))+
+              '<br>found '+shortDate(e.found)+' · arXiv '+shortDate(ax.published)+' · wiki '+shortDate(e.wiki_last_modified)+
+            '</div>'+
+          '</div>'+
+          '<div class="relbox">'+
+            '<div class="rv">'+rp+'%</div>'+
+            '<div class="relbar"><i style="width:'+Math.max(4,Math.min(100,rp))+'%"></i></div>'+
+          '</div>'+
+        '</div>';
+    }
+    log.innerHTML=html;
+  }
+
+  /* ─────────── DATA MODE BADGE ─────────── */
+  function setMode(live){
+    var b=$("dataMode");
+    if(live){ b.textContent="LIVE"; b.className="badge live"; }
+    else { b.textContent="OFFLINE · DEMO"; b.className="badge off"; }
+  }
+
+  /* ─────────── FETCH + APPLY ─────────── */
+  function fetchJSON(url){
+    return fetch(url+"?t="+Date.now(), {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error(r.status);
+      return r.json();
+    });
+  }
+
+  function apply(token, memory, live){
+    setMode(live);
+    var memCount = Object.keys(memory||{}).length;
+    renderHud(token, memCount);
+    renderComparator(token);
+    renderLog(memory);
+  }
+
+  function load(){
+    $("dataMode").textContent="CONNECTING…";
+    $("dataMode").className="badge";
+    // Fetch independently so a live-but-empty memory still counts as LIVE
+    // even if token.json is missing (and vice-versa). Only fall back to the
+    // full demo state when BOTH endpoints are unreachable.
+    var pTok = fetchJSON(TOKEN_URL).then(
+      function(j){ return (j && j.phase) ? {ok:true,val:j} : {ok:false}; },
+      function(){ return {ok:false}; });
+    var pMem = fetchJSON(MEMORY_URL).then(
+      function(j){ return (j && typeof j==="object" && !Array.isArray(j)) ? {ok:true,val:j} : {ok:false}; },
+      function(){ return {ok:false}; });
+
+    Promise.all([pTok, pMem]).then(function(r){
+      var tok=r[0], mem=r[1];
+      if(!tok.ok && !mem.ok){            // total outage → demo
+        apply(DEMO_TOKEN, DEMO_MEMORY, false);
+        return;
+      }
+      var token  = tok.ok ? tok.val : DEMO_TOKEN;   // missing token → demo token, still LIVE
+      var memory = mem.ok ? mem.val : {};
+      apply(token, memory, true);
+    });
+  }
+
+  $("refreshBtn").addEventListener("click", load);
+  load();
+  // gentle auto-refresh every 90s (live HUD without hammering)
+  setInterval(load, 90000);
+})();
+</script>
+</body>
+</html>
