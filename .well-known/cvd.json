@@ -1,0 +1,19 @@
+{
+  "schema": "CVD-PERMEATION-v1",
+  "repository": "DavidWise01/homer",
+  "registry": "https://github.com/DavidWise01/0root-provenance/blob/main/cvd/public-registry-2026-11-03.json",
+  "protocol": "https://github.com/DavidWise01/0root-provenance/tree/main/cvd",
+  "roles": {
+    "D1": "source attribution claims",
+    "D2": "rights/licensing claims",
+    "D3": "derivation lineage",
+    "D4": "repository custody"
+  },
+  "policy": "Git evidence only; no automatic assertion or transfer of authorship or ownership",
+  "state": "linked",
+  "formic": {
+    "observer": "repository",
+    "steward": "Jane/Grandmother",
+    "mode": "witness-only"
+  }
+}
